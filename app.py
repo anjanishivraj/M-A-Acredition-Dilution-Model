@@ -1,308 +1,211 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
+from io import BytesIO
+
+# ---------------------------------------------------
+# PAGE CONFIG
+# ---------------------------------------------------
 
 st.set_page_config(
-    page_title="M&A Accretion/Dilution Modeling",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="M&A Accretion/Dilution Model",
+    layout="wide"
 )
 
-# =========================
-# FINANCIAL MODEL ENGINE
-# =========================
+# ---------------------------------------------------
+# TITLE
+# ---------------------------------------------------
 
-def calculate_transaction(
-    buyer_net_income,
-    buyer_shares,
-    buyer_share_price,
-    target_net_income,
-    purchase_price,
-    debt_pct,
-    equity_pct,
-    interest_rate,
-    synergies,
-    tax_rate
-):
+st.title("Institutional M&A Accretion/Dilution Platform")
 
-    # Financing calculations
-    debt_raised = purchase_price * debt_pct
-    equity_issued = purchase_price * equity_pct
+st.markdown("""
+Interactive transaction modeling dashboard built using Python and Streamlit.
+""")
 
-    # Shares issued
-    new_shares = equity_issued / buyer_share_price
-
-    # Interest expense
-    interest_expense = debt_raised * interest_rate
-    after_tax_interest = interest_expense * (1 - tax_rate)
-
-    # EPS calculations
-    buyer_eps = buyer_net_income / buyer_shares
-
-    pro_forma_net_income = (
-        buyer_net_income
-        + target_net_income
-        + synergies
-        - after_tax_interest
-    )
-
-    pro_forma_shares = buyer_shares + new_shares
-
-    pro_forma_eps = pro_forma_net_income / pro_forma_shares
-
-    accretion_dilution = (
-        (pro_forma_eps - buyer_eps) / buyer_eps
-    )
-
-    return {
-        "buyer_eps": buyer_eps,
-        "debt_raised": debt_raised,
-        "equity_issued": equity_issued,
-        "new_shares": new_shares,
-        "interest_expense": interest_expense,
-        "after_tax_interest": after_tax_interest,
-        "pro_forma_net_income": pro_forma_net_income,
-        "pro_forma_shares": pro_forma_shares,
-        "pro_forma_eps": pro_forma_eps,
-        "accretion_dilution": accretion_dilution
-    }
-
-
-# =========================
+# ---------------------------------------------------
 # SIDEBAR INPUTS
-# =========================
+# ---------------------------------------------------
 
-st.sidebar.title("Transaction Assumptions")
+st.sidebar.header("Transaction Assumptions")
 
-st.sidebar.subheader("Buyer Information")
-
-buyer_net_income = st.sidebar.number_input(
-    "Buyer Net Income",
-    value=500.0,
-    step=10.0
+buyer_net_income = st.sidebar.slider(
+    "Buyer Net Income ($M)",
+    100,
+    10000,
+    2500
 )
 
-buyer_shares = st.sidebar.number_input(
-    "Buyer Shares Outstanding",
-    value=100.0,
-    step=1.0
+buyer_shares = st.sidebar.slider(
+    "Buyer Shares Outstanding (M)",
+    10,
+    5000,
+    1000
 )
 
-buyer_share_price = st.sidebar.number_input(
-    "Buyer Share Price",
-    value=50.0,
-    step=1.0
+target_net_income = st.sidebar.slider(
+    "Target Net Income ($M)",
+    10,
+    5000,
+    800
 )
 
-st.sidebar.subheader("Target Information")
-
-target_net_income = st.sidebar.number_input(
-    "Target Net Income",
-    value=80.0,
-    step=5.0
+purchase_price = st.sidebar.slider(
+    "Purchase Price ($M)",
+    100,
+    50000,
+    12000
 )
 
-purchase_price = st.sidebar.number_input(
-    "Purchase Price",
-    value=1200.0,
-    step=50.0
-)
-
-st.sidebar.subheader("Deal Assumptions")
-
-debt_pct = st.sidebar.slider(
+debt_percentage = st.sidebar.slider(
     "Debt Financing %",
-    min_value=0,
-    max_value=100,
-    value=60
-) / 100
-
-equity_pct = 1 - debt_pct
+    0,
+    100,
+    60
+)
 
 interest_rate = st.sidebar.slider(
     "Interest Rate %",
-    min_value=0.0,
-    max_value=15.0,
-    value=6.0
-) / 100
-
-synergies = st.sidebar.number_input(
-    "Synergies",
-    value=20.0,
-    step=5.0
+    1.0,
+    15.0,
+    6.0
 )
 
 tax_rate = st.sidebar.slider(
     "Tax Rate %",
-    min_value=0.0,
-    max_value=50.0,
-    value=25.0
-) / 100
-
-
-# =========================
-# RUN MODEL
-# =========================
-
-results = calculate_transaction(
-    buyer_net_income,
-    buyer_shares,
-    buyer_share_price,
-    target_net_income,
-    purchase_price,
-    debt_pct,
-    equity_pct,
-    interest_rate,
-    synergies,
-    tax_rate
+    0,
+    50,
+    25
 )
 
+synergies = st.sidebar.slider(
+    "Annual Synergies ($M)",
+    0,
+    2000,
+    300
+)
 
-# =========================
-# MAIN DASHBOARD
-# =========================
+share_price = st.sidebar.slider(
+    "Buyer Share Price ($)",
+    10,
+    1000,
+    100
+)
 
-st.title("M&A Accretion/Dilution Model")
-st.caption("Excel Financial Modeling + Python Transaction Analysis")
+# ---------------------------------------------------
+# CORE CALCULATIONS
+# ---------------------------------------------------
 
+buyer_eps = buyer_net_income / buyer_shares
 
-# =========================
+debt_financing = purchase_price * (debt_percentage / 100)
+
+equity_financing = purchase_price - debt_financing
+
+interest_expense = debt_financing * (interest_rate / 100)
+
+after_tax_interest = interest_expense * (1 - tax_rate / 100)
+
+new_shares_issued = equity_financing / share_price
+
+pro_forma_net_income = (
+    buyer_net_income
+    + target_net_income
+    + synergies
+    - after_tax_interest
+)
+
+pro_forma_shares = buyer_shares + new_shares_issued
+
+pro_forma_eps = pro_forma_net_income / pro_forma_shares
+
+accretion_dilution = (
+    (pro_forma_eps - buyer_eps)
+    / buyer_eps
+) * 100
+
+# ---------------------------------------------------
 # KPI METRICS
-# =========================
+# ---------------------------------------------------
 
-col1, col2, col3, col4 = st.columns(4)
+st.subheader("Transaction Metrics")
 
-with col1:
-    st.metric(
-        "Buyer EPS",
-        f"{results['buyer_eps']:.2f}"
-    )
+col1, col2, col3 = st.columns(3)
 
-with col2:
-    st.metric(
-        "Pro Forma EPS",
-        f"{results['pro_forma_eps']:.2f}"
-    )
+col1.metric(
+    "Buyer EPS",
+    f"${buyer_eps:.2f}"
+)
 
-with col3:
-    st.metric(
-        "Accretion/Dilution",
-        f"{results['accretion_dilution'] * 100:.2f}%"
-    )
+col2.metric(
+    "Pro Forma EPS",
+    f"${pro_forma_eps:.2f}"
+)
 
-with col4:
-    st.metric(
-        "Interest Expense",
-        f"{results['interest_expense']:.2f}"
-    )
+col3.metric(
+    "Accretion / Dilution %",
+    f"{accretion_dilution:.2f}%"
+)
 
-st.divider()
+# ---------------------------------------------------
+# FINANCING STRUCTURE CHART
+# ---------------------------------------------------
 
+st.subheader("Financing Structure")
 
-# =========================
-# TRANSACTION SUMMARY
-# =========================
+fig_financing = go.Figure(
+    data=[
+        go.Pie(
+            labels=["Debt", "Equity"],
+            values=[debt_financing, equity_financing],
+            hole=0.4
+        )
+    ]
+)
 
-summary_col1, summary_col2 = st.columns([1, 1])
+st.plotly_chart(fig_financing, use_container_width=True)
 
-with summary_col1:
-
-    st.subheader("Transaction Summary")
-
-    summary_df = pd.DataFrame({
-        "Metric": [
-            "Debt Raised",
-            "Equity Issued",
-            "New Shares Issued",
-            "Pro Forma Net Income",
-            "Pro Forma Shares"
-        ],
-        "Value": [
-            results['debt_raised'],
-            results['equity_issued'],
-            results['new_shares'],
-            results['pro_forma_net_income'],
-            results['pro_forma_shares']
-        ]
-    })
-
-    st.dataframe(summary_df, use_container_width=True)
-
-
-with summary_col2:
-
-    st.subheader("Sources & Uses")
-
-    financing_df = pd.DataFrame({
-        "Category": ["Debt", "Equity"],
-        "Amount": [
-            results['debt_raised'],
-            results['equity_issued']
-        ]
-    })
-
-    pie_chart = px.pie(
-        financing_df,
-        names="Category",
-        values="Amount",
-        title="Transaction Financing Mix"
-    )
-
-    st.plotly_chart(pie_chart, use_container_width=True)
-
-
-st.divider()
-
-
-# =========================
+# ---------------------------------------------------
 # EPS BRIDGE CHART
-# =========================
+# ---------------------------------------------------
 
 st.subheader("EPS Bridge Analysis")
 
 bridge_labels = [
-    "Buyer EPS",
-    "Target Contribution",
+    "Buyer NI",
+    "Target NI",
     "Synergies",
-    "Interest Expense",
-    "Pro Forma EPS"
+    "Interest Expense"
 ]
 
 bridge_values = [
-    results['buyer_eps'],
-    target_net_income / buyer_shares,
-    synergies / buyer_shares,
-    -results['after_tax_interest'] / buyer_shares,
-    results['pro_forma_eps']
+    buyer_net_income,
+    target_net_income,
+    synergies,
+    -after_tax_interest
 ]
 
-bridge_fig = go.Figure(go.Waterfall(
-    name="EPS Bridge",
-    orientation="v",
-    measure=["absolute", "relative", "relative", "relative", "total"],
-    x=bridge_labels,
-    y=bridge_values
-))
+fig_bridge = go.Figure()
 
-bridge_fig.update_layout(
-    title="EPS Impact Analysis"
+fig_bridge.add_trace(
+    go.Bar(
+        x=bridge_labels,
+        y=bridge_values
+    )
 )
 
-st.plotly_chart(bridge_fig, use_container_width=True)
+st.plotly_chart(fig_bridge, use_container_width=True)
 
-
-# =========================
+# ---------------------------------------------------
 # SENSITIVITY ANALYSIS
-# =========================
+# ---------------------------------------------------
 
 st.subheader("Sensitivity Analysis")
 
-premium_range = [0.10, 0.20, 0.30, 0.40, 0.50]
-synergy_range = [0, 10, 20, 30, 40]
+premium_range = np.arange(-10, 31, 5)
+synergy_range = np.arange(0, 601, 100)
 
-heatmap_data = []
+sensitivity_matrix = []
 
 for synergy in synergy_range:
 
@@ -310,123 +213,188 @@ for synergy in synergy_range:
 
     for premium in premium_range:
 
-        adjusted_purchase_price = purchase_price * (1 + premium)
-
-        sensitivity_results = calculate_transaction(
-            buyer_net_income,
-            buyer_shares,
-            buyer_share_price,
-            target_net_income,
-            adjusted_purchase_price,
-            debt_pct,
-            equity_pct,
-            interest_rate,
-            synergy,
-            tax_rate
+        adjusted_purchase_price = (
+            purchase_price * (1 + premium / 100)
         )
 
-        row.append(sensitivity_results['accretion_dilution'] * 100)
+        adjusted_debt = (
+            adjusted_purchase_price
+            * (debt_percentage / 100)
+        )
 
-    heatmap_data.append(row)
+        adjusted_equity = (
+            adjusted_purchase_price
+            - adjusted_debt
+        )
 
-heatmap_df = pd.DataFrame(
-    heatmap_data,
-    index=[f"{x}" for x in synergy_range],
-    columns=[f"{int(x*100)}%" for x in premium_range]
+        adjusted_interest = (
+            adjusted_debt
+            * (interest_rate / 100)
+        )
+
+        adjusted_after_tax_interest = (
+            adjusted_interest
+            * (1 - tax_rate / 100)
+        )
+
+        adjusted_new_shares = (
+            adjusted_equity / share_price
+        )
+
+        adjusted_net_income = (
+            buyer_net_income
+            + target_net_income
+            + synergy
+            - adjusted_after_tax_interest
+        )
+
+        adjusted_shares = (
+            buyer_shares
+            + adjusted_new_shares
+        )
+
+        adjusted_eps = (
+            adjusted_net_income
+            / adjusted_shares
+        )
+
+        adjusted_acc_dil = (
+            (adjusted_eps - buyer_eps)
+            / buyer_eps
+        ) * 100
+
+        row.append(round(adjusted_acc_dil, 2))
+
+    sensitivity_matrix.append(row)
+
+fig_heatmap = go.Figure(
+    data=go.Heatmap(
+        z=sensitivity_matrix,
+        x=premium_range,
+        y=synergy_range
+    )
 )
 
-heatmap = px.imshow(
-    heatmap_df,
-    text_auto=True,
-    aspect="auto",
-    labels=dict(
-        x="Purchase Premium",
-        y="Synergies",
-        color="Accretion/Dilution %"
-    ),
-    title="Accretion/Dilution Sensitivity Matrix"
+fig_heatmap.update_layout(
+    xaxis_title="Purchase Premium %",
+    yaxis_title="Synergies ($M)"
 )
 
-st.plotly_chart(heatmap, use_container_width=True)
+st.plotly_chart(fig_heatmap, use_container_width=True)
 
-
-# =========================
+# ---------------------------------------------------
 # SCENARIO ANALYSIS
-# =========================
+# ---------------------------------------------------
 
 st.subheader("Scenario Analysis")
 
 scenario_df = pd.DataFrame({
     "Scenario": ["Bear", "Base", "Bull"],
-    "Synergies": [10, 20, 40],
-    "Interest Rate": [0.08, 0.06, 0.04]
+    "Synergies": [100, synergies, 600],
+    "Interest Rate": [8, interest_rate, 4]
 })
 
-scenario_outputs = []
+st.dataframe(scenario_df)
 
-for _, row in scenario_df.iterrows():
+# ---------------------------------------------------
+# EXPORTABLE EXCEL MODEL
+# ---------------------------------------------------
 
-    scenario_result = calculate_transaction(
-        buyer_net_income,
-        buyer_shares,
-        buyer_share_price,
-        target_net_income,
-        purchase_price,
-        debt_pct,
-        equity_pct,
-        row['Interest Rate'],
-        row['Synergies'],
-        tax_rate
-    )
+def create_excel_file():
 
-    scenario_outputs.append(
-        scenario_result['accretion_dilution'] * 100
-    )
+    output = BytesIO()
 
-scenario_df['Accretion/Dilution %'] = scenario_outputs
+    with pd.ExcelWriter(
+        output,
+        engine='xlsxwriter'
+    ) as writer:
 
-scenario_chart = px.bar(
-    scenario_df,
-    x="Scenario",
-    y="Accretion/Dilution %",
-    title="Scenario Analysis"
+        assumptions_df = pd.DataFrame({
+            "Metric": [
+                "Buyer Net Income",
+                "Buyer Shares",
+                "Target Net Income",
+                "Purchase Price",
+                "Debt Financing %",
+                "Interest Rate %",
+                "Tax Rate %",
+                "Synergies",
+                "Share Price"
+            ],
+            "Value": [
+                buyer_net_income,
+                buyer_shares,
+                target_net_income,
+                purchase_price,
+                debt_percentage,
+                interest_rate,
+                tax_rate,
+                synergies,
+                share_price
+            ]
+        })
+
+        results_df = pd.DataFrame({
+            "Metric": [
+                "Buyer EPS",
+                "Pro Forma EPS",
+                "Accretion/Dilution %",
+                "Debt Financing",
+                "Equity Financing",
+                "New Shares Issued"
+            ],
+            "Value": [
+                buyer_eps,
+                pro_forma_eps,
+                accretion_dilution,
+                debt_financing,
+                equity_financing,
+                new_shares_issued
+            ]
+        })
+
+        sensitivity_df = pd.DataFrame(
+            sensitivity_matrix,
+            columns=premium_range,
+            index=synergy_range
+        )
+
+        assumptions_df.to_excel(
+            writer,
+            sheet_name="Assumptions",
+            index=False
+        )
+
+        results_df.to_excel(
+            writer,
+            sheet_name="Results",
+            index=False
+        )
+
+        sensitivity_df.to_excel(
+            writer,
+            sheet_name="Sensitivity"
+        )
+
+    processed_data = output.getvalue()
+
+    return processed_data
+
+excel_file = create_excel_file()
+
+st.download_button(
+    label="Download Excel Financial Model",
+    data=excel_file,
+    file_name="ma_accretion_dilution_model.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 
-st.plotly_chart(scenario_chart, use_container_width=True)
-
-
-# =========================
-# MODEL ASSUMPTIONS
-# =========================
-
-with st.expander("Model Assumptions and Methodology"):
-
-    st.markdown("""
-    ### Core Assumptions
-
-    - Financing structure directly impacts EPS through interest expense and share dilution.
-    - Debt financing increases leverage and financing costs.
-    - Equity financing increases shares outstanding.
-    - Synergies are treated as incremental earnings contributions.
-    - Interest expense is tax-adjusted.
-
-    ### Financial Logic
-
-    Pro Forma Net Income = Buyer NI + Target NI + Synergies - After-Tax Interest
-
-    Pro Forma EPS = Pro Forma Net Income / Pro Forma Shares
-
-    Accretion/Dilution % = (Pro Forma EPS - Buyer EPS) / Buyer EPS
-    """)
-
-
-# =========================
+# ---------------------------------------------------
 # FOOTER
-# =========================
+# ---------------------------------------------------
 
-st.divider()
+st.markdown("---")
 
 st.caption(
-    "Built using Python, Streamlit, Pandas, NumPy, and Plotly | "
-    
+    "Built using Python, Streamlit, Pandas, NumPy, and Plotly"
 )
